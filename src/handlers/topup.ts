@@ -442,15 +442,34 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       await ctx.answerCallbackQuery({ text: ctx.t('err.unknown_action') });
       return;
     }
-    const dep = await createDeposit({
-      user_id: ctx.user.telegram_id,
-      method: m.name,
-      amount: 0,
-    });
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(renderMdHtml(ctx.t('topup.requested', { id: dep.id })), {
-      parse_mode: 'HTML',
-    });
+
+    // Previously this inserted `amount: 0` straight away, which the
+    // `deposits_amount_check` (amount > 0) constraint rejects — every
+    // manual method (e.g. ARBITRUM) died with "Temporary error" and no
+    // deposit row was ever created. Collect the amount and the
+    // transaction reference first, then insert a complete row.
+    ctx.session.userFlow = {
+      type: 'manual_topup',
+      step: 'usd_amount',
+      data: {
+        method_id: m.id,
+        method_name: m.name,
+        min_amount: Number(m.min_amount) || 0,
+        instruction_message_id: ctx.callbackQuery?.message?.message_id,
+      },
+    };
+
+    const minLabel = Math.max(0.01, Number(m.min_amount) || 0).toFixed(2);
+    await ctx.reply(
+      renderMdHtml(
+        `💸 *${m.name}*\n\n` +
+          `Send the *amount in USD* you paid (numbers only).\n` +
+          `Minimum: *${minLabel}*\n\n` +
+          `_Send /cancel to abort._`,
+      ),
+      { parse_mode: 'HTML' },
+    );
   });
 
   // ----- Auto-verify top-up flows -----
@@ -464,6 +483,10 @@ export function registerTopup(bot: Composer<AppCtx>): void {
       return next();
     }
 
+    if (flow.type === 'manual_topup') {
+      await handleManualTopup(ctx, flow, text);
+      return;
+    }
     if (flow.type === 'chain_topup' && flow.step === 'usd_amount') {
       await handleChainUsdAmount(ctx, flow, text);
       return;
@@ -565,6 +588,78 @@ export function registerTopup(bot: Composer<AppCtx>): void {
   });
 }
 // ----- USDT chain flow (BEP20 / TRC20 / TON) -----------------------------
+
+/**
+ * Manual (admin-reviewed) top-up: collect the USD amount, then the
+ * transaction id / reference, then create ONE complete deposit row.
+ *
+ * The old flow inserted `amount: 0` the moment the button was tapped,
+ * which the `deposits_amount_check` (amount > 0) constraint rejects —
+ * so manual methods failed with a generic "Temporary error" and the
+ * admin never saw a request at all.
+ */
+async function handleManualTopup(
+  ctx: AppCtx,
+  flow: Extract<NonNullable<AppCtx['session']['userFlow']>, { type: 'manual_topup' }>,
+  text: string,
+): Promise<void> {
+  if (flow.step === 'usd_amount') {
+    const amount = parseCryptoPayAmount(text, flow.data.min_amount);
+    if (amount === null) {
+      await ctx.reply(
+        renderMdHtml(
+          ctx.t('topup.usdt.invalid_amount', {
+            minimum: Math.max(0.01, Number(flow.data.min_amount) || 0).toFixed(2),
+          }),
+        ),
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+    ctx.session.userFlow = {
+      type: 'manual_topup',
+      step: 'reference',
+      data: { ...flow.data, amount },
+    };
+    await ctx.reply(
+      renderMdHtml(
+        `✅ Amount: *${amount.toFixed(2)} USD*\n\n` +
+          `Now paste your *transaction id / hash* (or any reference that proves the payment).\n\n` +
+          `_Send /cancel to abort._`,
+      ),
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  // step === 'reference'
+  const reference = text.slice(0, 200);
+  const amount = Number(flow.data.amount ?? 0);
+  if (!(amount > 0)) {
+    ctx.session.userFlow = undefined;
+    await ctx.reply(renderMdHtml(ctx.t('err.generic')), { parse_mode: 'HTML' });
+    return;
+  }
+
+  let dep: Awaited<ReturnType<typeof createDeposit>>;
+  try {
+    dep = await createDeposit({
+      user_id: ctx.user.telegram_id,
+      method: flow.data.method_name,
+      amount,
+      reference,
+    });
+  } catch (err) {
+    logger.error({ err, method: flow.data.method_name }, 'manual deposit insert failed');
+    await ctx.reply(renderMdHtml(ctx.t('err.generic')), { parse_mode: 'HTML' });
+    return;
+  }
+
+  ctx.session.userFlow = undefined;
+  await ctx.reply(renderMdHtml(ctx.t('topup.requested', { id: dep.id })), {
+    parse_mode: 'HTML',
+  });
+}
 
 async function handleChainUsdAmount(
   ctx: AppCtx,

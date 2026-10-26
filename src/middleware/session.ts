@@ -664,6 +664,23 @@ export type UserFlow =
       };
     }
   | {
+      /**
+       * Manual (admin-reviewed) top-up. The buyer states the amount
+       * they sent, then pastes a transaction id / reference, and the
+       * deposit lands in the admin's Top-Up Requests queue with both
+       * values already filled in.
+       */
+      type: 'manual_topup';
+      step: 'usd_amount' | 'reference';
+      data: {
+        method_id: number;
+        method_name: string;
+        min_amount: number;
+        amount?: number;
+        instruction_message_id?: number;
+      };
+    }
+  | {
       type: 'cryptobot_topup';
       step: 'usd_amount';
       data: {
