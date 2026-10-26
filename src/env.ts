@@ -21,7 +21,7 @@ if (!process.env.SMTP_PASS && process.env.ZYRON_SMTP_PASS) {
  * zero configuration. Override per-deployment by setting
  * `LOG_CHAT_ID` explicitly (use `LOG_CHAT_ID=0` to opt out).
  */
-const DEFAULT_LOG_CHAT = '@safhubhaijan012826';
+const DEFAULT_LOG_CHAT = '@npczyron';
 
 /**
  * Default Telegram chat for `ORDER_LOG_CHAT_ID` — the dedicated
@@ -30,7 +30,7 @@ const DEFAULT_LOG_CHAT = '@safhubhaijan012826';
  * here; everything else (top-ups, support, settings, PDFs, etc.)
  * still goes to the main `LOG_CHAT_ID` channel.
  */
-const DEFAULT_ORDER_LOG_CHAT = '@safbanuunny0138';
+const DEFAULT_ORDER_LOG_CHAT = '@npczyron';
 
 /** Public shop feed / watcher group. Empty means reuse the working order-log chat. */
 const DEFAULT_PUBLIC_FEED_CHAT = '';
