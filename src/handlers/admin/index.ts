@@ -665,9 +665,18 @@ adminBot.callbackQuery(/^adm:gift:del:(.+)$/, async (ctx) => {
 // at the first ~30 products and truncate the entire body to 3950
 // chars as a final guard.
 function escapeMd(s: string): string {
-  // Markdown v1 treats backslash plus `_*\`[` as special.
-  // Keep the escape set minimal to match the rest of the admin UI.
-  return s.replace(/([_*`[\]\\])/g, '\\$1');
+  // Telegram's LEGACY Markdown (parse_mode: 'Markdown') does NOT
+  // support backslash escaping — only MarkdownV2 does. Emitting
+  // `\_` therefore leaves a dangling entity and Telegram rejects the
+  // whole message with:
+  //   400 Bad Request: can't parse entities: Can't find end of the
+  //   entity starting at byte offset N
+  // This bit any admin card rendering user-supplied text containing
+  // `_` (e.g. uploading "order_ABC_links.txt" to the items pool).
+  //
+  // Since the admin UI is display-only here, neutralise the entity
+  // characters instead of trying to escape them.
+  return s.replace(/[_*`[\]\\]/g, '-');
 }
 
 function statsRangeKeyboard(days?: number): InlineKeyboard {
