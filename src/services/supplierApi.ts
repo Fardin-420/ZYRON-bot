@@ -224,7 +224,7 @@ export function tunVnMmoSupplierConfig(apiKey: string): SupplierSourceConfig {
 
 export function supabaseResellerSupplierConfig(apiKey: string): SupplierSourceConfig {
   return {
-    name: 'Safwan Reseller API',
+    name: 'ZYRON Reseller API',
     base_url: 'https://eygkdpfjrjwwbiackfpr.supabase.co/functions/v1/reseller-api',
     api_key: apiKey.trim(),
     auth_mode: 'bearer',
@@ -250,7 +250,7 @@ export function supabaseResellerSupplierConfig(apiKey: string): SupplierSourceCo
     low_balance_threshold: 5,
     auto_import_new_products: false,
     auto_import_active: false,
-    import_category_name: 'Safwan Reseller Products',
+    import_category_name: 'ZYRON Reseller Products',
     notes: 'One-click Bearer-token supplier connector for Supabase reseller-api?action endpoints.',
   };
 }

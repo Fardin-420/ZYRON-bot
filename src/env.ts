@@ -8,10 +8,10 @@ if (!process.env.TELEGRAM_BOT_TOKEN && process.env.BOT_TOKEN) {
 
 // Same idea for SMTP — the production deploy uses generic SMTP_*
 // names, but Devin's saved-secret manager stores the mailbox password
-// under the more specific `SAFWANTIGER_SMTP_PASS` so it can be reused
+// under the more specific `ZYRON_SMTP_PASS` so it can be reused
 // for other tooling. Either name works at runtime.
-if (!process.env.SMTP_PASS && process.env.SAFWANTIGER_SMTP_PASS) {
-  process.env.SMTP_PASS = process.env.SAFWANTIGER_SMTP_PASS;
+if (!process.env.SMTP_PASS && process.env.ZYRON_SMTP_PASS) {
+  process.env.SMTP_PASS = process.env.ZYRON_SMTP_PASS;
 }
 
 /**
@@ -36,7 +36,7 @@ const DEFAULT_ORDER_LOG_CHAT = '@safbanuunny0138';
 const DEFAULT_PUBLIC_FEED_CHAT = '';
 
 /** Dedicated public group for verified bKash payment notifications. */
-const DEFAULT_BKASH_PAYMENTS_CHAT = '@SafwanBkashPaysNotification101';
+const DEFAULT_BKASH_PAYMENTS_CHAT = '@NPCfardin';
 
 /**
  * Shared transformer for the `LOG_CHAT_ID` family of env vars. Each
@@ -89,10 +89,10 @@ const schema = z.object({
   SMTP_USER: z.string().optional().or(z.literal('')),
   SMTP_PASS: z.string().optional().or(z.literal('')),
   // Defaults to SMTP_USER when unset. Lets you send as
-  // "SafwanTiger Shop <shopbot@safwantiger.com>" while authenticating
+  // "ZYRON <Claudenpc@hotmail.com>" while authenticating
   // as the same mailbox.
   SMTP_FROM: z.string().optional().or(z.literal('')),
-  SMTP_FROM_NAME: z.string().default('SafwanTiger Shop'),
+  SMTP_FROM_NAME: z.string().default('ZYRON'),
 
   // ----------------------------------------------------------------
   //  Resend (HTTPS API) — preferred transport on cloud platforms
@@ -100,11 +100,11 @@ const schema = z.object({
   // ----------------------------------------------------------------
   // When RESEND_API_KEY is set, the mailer uses Resend's HTTPS API
   // instead of nodemailer. This bypasses the SMTP-port firewall on
-  // cloud platforms while preserving the same "From: shopbot@safwantiger.com"
-  // identity (provided the safwantiger.com domain has been verified
+  // cloud platforms while preserving the same "From: Claudenpc@hotmail.com"
+  // identity (provided the zyron.shop domain has been verified
   // in the Resend dashboard via DKIM + SPF DNS records).
   RESEND_API_KEY: z.string().optional().or(z.literal('')),
-  // Defaults to "shopbot@safwantiger.com" if both this and SMTP_USER
+  // Defaults to "Claudenpc@hotmail.com" if both this and SMTP_USER
   // are unset. Must be an address whose domain is verified in Resend.
   RESEND_FROM: z.string().optional().or(z.literal('')),
 

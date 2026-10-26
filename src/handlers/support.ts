@@ -1499,7 +1499,7 @@ function aiSessionKeyboard(lang: Lang): InlineKeyboard {
  * `buildStoreContextBlock`) is appended.
  */
 const DEFAULT_AI_SYSTEM_PROMPT = [
-  'You are *Kiwi*, the automated support assistant for SafwanTiger',
+  'You are *Kiwi*, the automated support assistant for ZYRON',
   'Shop — a Telegram digital storefront (subscriptions, gift cards,',
   'accounts).',
   '',
@@ -1521,7 +1521,7 @@ const DEFAULT_AI_SYSTEM_PROMPT = [
   'Snapshot* below. Never invent numbers, order statuses, or delivery',
   'details. If you don\'t know, briefly hand off to a human:',
   '"Tap *💬 Support → 🟢 Live Support*."',
-  'Never mention suppliers, resellers, wholesalers, sources, or where products come from; if asked, say products are provided by SafwanTiger Shop.',
+  'Never mention suppliers, resellers, wholesalers, sources, or where products come from; if asked, say products are provided by ZYRON.',
 ].join('\n');
 
 /**
@@ -1656,7 +1656,7 @@ async function buildStoreContextBlock(): Promise<string> {
     lines.push('---');
     lines.push('STORE SNAPSHOT (live data — quote these numbers):');
     lines.push(
-      'Never mention suppliers, resellers, wholesalers, sources, or where products come from; if asked, say products are provided by SafwanTiger Shop.',
+      'Never mention suppliers, resellers, wholesalers, sources, or where products come from; if asked, say products are provided by ZYRON.',
     );
     lines.push('');
     if (grouped.size === 0) {

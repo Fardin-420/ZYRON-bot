@@ -23,7 +23,7 @@ import { logger } from '../logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-/** Path to the SafwanTiger Shop logo (same asset used in the email). */
+/** Path to the ZYRON logo (same asset used in the email). */
 const LOGO_PATH = path.resolve(__dirname, '../../../assets/email-logo.png');
 
 // ---------------------------------------------------------------------------
@@ -284,10 +284,10 @@ function renderPdf(
         size: 'LETTER',
         margins: { top: 96, bottom: 0, left: MARGIN_X, right: MARGIN_X },
         info: {
-          Title: `SafwanTiger Shop — ${title}`,
-          Author: 'SafwanTiger Shop',
+          Title: `ZYRON — ${title}`,
+          Author: 'ZYRON',
           Subject: `${title} report`,
-          Creator: 'SafwanTiger Shop Bot',
+          Creator: 'ZYRON Bot',
         },
       });
       const chunks: Buffer[] = [];
@@ -383,7 +383,7 @@ function paintPageChrome(
     .fillColor(COLOR.gold)
     .font('Helvetica-Bold')
     .fontSize(9)
-    .text('SAFWANTIGER  SHOP', textX, 38, {
+    .text('Z Y R O N', textX, 38, {
       characterSpacing: 1.6,
       lineBreak: false,
     });
@@ -405,7 +405,7 @@ function paintPageChrome(
 
   // User identity (right side)
   const idLines = [
-    user.first_name ? user.first_name : 'SafwanTiger Shop user',
+    user.first_name ? user.first_name : 'ZYRON user',
     user.username ? `@${user.username}` : null,
     `ID: ${user.telegram_id}`,
     user.email ? user.email : null,
@@ -427,7 +427,7 @@ function paintPageChrome(
     .font('Helvetica')
     .fontSize(8)
     .text(
-      'SafwanTiger Shop · @safwantigershopbot · shopbot@safwantiger.com',
+      'ZYRON · @NPCPremiumBot · Claudenpc@hotmail.com',
       MARGIN_X,
       PAGE_H - 36,
       {
@@ -737,11 +737,11 @@ export async function buildInvoicePdf(args: {
     // an admin can re-enable this section later without a refactor.
     drawSectionHeader(doc, 'Notes');
     drawInfoBlock(doc, [
-      'Thanks for purchasing from SafwanTiger Shop. This invoice is your',
+      'Thanks for purchasing from ZYRON. This invoice is your',
       'permanent receipt — keep it for your records.',
       '',
       'Need help with this order? Reply to this email or message',
-      '@safwantigershopbot on Telegram with your Order ID above.',
+      '@NPCPremiumBot on Telegram with your Order ID above.',
     ]);
   });
 }
@@ -970,7 +970,7 @@ export async function buildPriceListPdf(args: {
 }): Promise<Buffer> {
   const reportUser: ReportUser = {
     telegram_id: 0,
-    first_name: 'SafwanTiger Shop',
+    first_name: 'ZYRON',
     username: null,
     email: null,
   };

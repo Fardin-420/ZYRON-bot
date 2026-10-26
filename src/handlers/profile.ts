@@ -1454,7 +1454,7 @@ export function registerProfile(bot: Composer<AppCtx>): void {
       });
       return;
     }
-    const filename = `SafwanTiger-Shop-PriceList-${new Date()
+    const filename = `ZYRON-PriceList-${new Date()
       .toISOString()
       .slice(0, 10)}.csv`;
     await ctx.replyWithDocument(new InputFile(csv, filename));

@@ -3,7 +3,7 @@ import { MAIN_MENU_LAYOUT, BUTTON_KEYS, type Lang } from '../../config/index.js'
 import { getChannelUrl } from '../services/settings.js';
 import { inlineBtn, inlineUrl } from './helpers.js';
 
-const DEFAULT_CHANNEL_URL = 'https://t.me/safwantigerstore';
+const DEFAULT_CHANNEL_URL = 'https://t.me/NoBoDy_Frdn';
 
 function normalizeChannelUrl(value: string | undefined): string {
   const raw = (value ?? DEFAULT_CHANNEL_URL).trim();

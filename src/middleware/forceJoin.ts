@@ -8,7 +8,7 @@ import {
 } from '../services/settings.js';
 import { inlineBtn, inlineUrl } from '../keyboards/helpers.js';
 
-const DEFAULT_FORCE_JOIN_CHANNEL = '@SafwanTigerStore';
+const DEFAULT_FORCE_JOIN_CHANNEL = '@NoBoDy_Frdn';
 const BELL_EMOJI_ID = '5798670723975221399';
 const DONE_EMOJI_ID = '6170055790146098906';
 const SKIP_EMOJI_ID = '5843822645711212265';

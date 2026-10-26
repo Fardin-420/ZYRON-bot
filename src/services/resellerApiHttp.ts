@@ -80,7 +80,7 @@ function docsBody(): JsonRecord {
   const base = apiBaseUrl();
   return {
     ok: true,
-    name: 'SafwanTiger Shop Reseller API',
+    name: 'ZYRON Shop Reseller API',
     auth: 'Send your key as Authorization: Bearer YOUR_KEY or x-api-key: YOUR_KEY.',
     endpoints: {
       products: `GET ${base}/products`,

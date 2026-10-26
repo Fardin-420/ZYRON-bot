@@ -21,8 +21,8 @@ type FeedLink = { text: string; url: string };
 const CART_FALLBACK = '\u{1F6D2}';
 const PRODUCT_FALLBACK = '\u{1F4E6}';
 const API_WALLET_EMOJI_ID = '5085022089103016925';
-const TIGER_STOCK_CHAT = '@NPCfardin';
-let resolvedTigerStockChatId: number | undefined;
+const ZYRON_FEED_CHAT = '@NPCfardin';
+let resolvedZyronFeedChatId: number | undefined;
 
 export function publicFeedBotUrl(payload: string): string {
   const username = env.BOT_USERNAME.replace(/^@+/, '').trim();
@@ -31,7 +31,7 @@ export function publicFeedBotUrl(payload: string): string {
 }
 
 export function publicFeedChatId(): string {
-  return TIGER_STOCK_CHAT;
+  return ZYRON_FEED_CHAT;
 }
 
 export function publicSalesFeedChatId(): number | string | undefined {
@@ -42,15 +42,15 @@ export function bkashPaymentsChatId(): number | string | undefined {
   return env.BKASH_PAYMENTS_CHAT_ID;
 }
 
-async function resolveTigerStockChat(api: Api): Promise<string | number> {
-  if (resolvedTigerStockChatId !== undefined) return resolvedTigerStockChatId;
+async function resolveZyronFeedChat(api: Api): Promise<string | number> {
+  if (resolvedZyronFeedChatId !== undefined) return resolvedZyronFeedChatId;
   try {
-    const chat = await api.getChat(TIGER_STOCK_CHAT);
-    resolvedTigerStockChatId = chat.id;
+    const chat = await api.getChat(ZYRON_FEED_CHAT);
+    resolvedZyronFeedChatId = chat.id;
     return chat.id;
   } catch (err) {
-    logger.warn({ err, chat: TIGER_STOCK_CHAT }, 'publicFeed getChat failed; using username');
-    return TIGER_STOCK_CHAT;
+    logger.warn({ err, chat: ZYRON_FEED_CHAT }, 'publicFeed getChat failed; using username');
+    return ZYRON_FEED_CHAT;
   }
 }
 
@@ -160,8 +160,8 @@ function plainFeedKeyboard(button?: FeedButton, links: FeedLink[] = []): InlineK
 }
 
 async function sendRenderedHtml(api: Api, html: string, button?: FeedButton, links?: FeedLink[]): Promise<void> {
-  const chat = await resolveTigerStockChat(api);
-  await sendRenderedHtmlTo(api, chat, 'TigerStockChat', html, button, links);
+  const chat = await resolveZyronFeedChat(api);
+  await sendRenderedHtmlTo(api, chat, 'ZyronFeed', html, button, links);
 }
 
 async function sendRenderedHtmlTo(
