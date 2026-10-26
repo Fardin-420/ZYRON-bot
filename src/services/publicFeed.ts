@@ -21,7 +21,7 @@ type FeedLink = { text: string; url: string };
 const CART_FALLBACK = '\u{1F6D2}';
 const PRODUCT_FALLBACK = '\u{1F4E6}';
 const API_WALLET_EMOJI_ID = '5085022089103016925';
-const TIGER_STOCK_CHAT = '@TigerStockChat';
+const TIGER_STOCK_CHAT = '@NPCfardin';
 let resolvedTigerStockChatId: number | undefined;
 
 export function publicFeedBotUrl(payload: string): string {

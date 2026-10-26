@@ -291,7 +291,7 @@ export function referKeyboard(
   }
   inlineCopyText(kb, lang, 'copy_link', link);
   kb.row();
-  inlineUrl(kb, lang, 'live_refers', 'https://t.me/TigerStockChat');
+  inlineUrl(kb, lang, 'live_refers', 'https://t.me/NPCfardin');
   kb.row();
   inlineBtn(kb, lang, 'refresh', options.refreshCallback ?? 'profile:refer');
   kb.row();
