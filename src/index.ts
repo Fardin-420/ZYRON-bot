@@ -67,14 +67,44 @@ async function main() {
     logger.info('Starting bot with long-polling (concurrent runner)…');
     const me = await bot.api.getMe();
     logger.info({ username: me.username }, 'Bot is online');
-    const runner = run(bot);
-    const stop = async () => {
-      if (runner.isRunning()) await runner.stop();
-      process.exit(0);
-    };
-    process.once('SIGINT', () => void stop());
-    process.once('SIGTERM', () => void stop());
-    await runner.task();
+
+    // Render keeps the previous instance alive until the new one
+    // reports healthy. Two long-polling instances sharing one token
+    // make Telegram reject the newcomer with:
+    //   409 Conflict: terminated by other getUpdates request
+    // Crashing here would fail every deploy forever, so instead we
+    // keep retrying: the HTTP port is already open, Render marks this
+    // instance healthy, retires the old one, and the next attempt
+    // succeeds.
+    const POLL_RETRY_MS = 5_000;
+    const POLL_RETRY_LIMIT = 60; // ~5 minutes of handover tolerance
+
+    const isConflict = (err: unknown): boolean =>
+      typeof err === 'object' &&
+      err !== null &&
+      (err as { error_code?: number }).error_code === 409;
+
+    for (let attempt = 1; ; attempt += 1) {
+      const runner = run(bot);
+      const stop = async () => {
+        if (runner.isRunning()) await runner.stop();
+        process.exit(0);
+      };
+      process.once('SIGINT', () => void stop());
+      process.once('SIGTERM', () => void stop());
+
+      try {
+        await runner.task();
+        return; // stopped cleanly
+      } catch (err) {
+        if (!isConflict(err) || attempt >= POLL_RETRY_LIMIT) throw err;
+        logger.warn(
+          { attempt },
+          'Another instance still polling (409); retrying after handover…',
+        );
+        await new Promise((r) => setTimeout(r, POLL_RETRY_MS));
+      }
+    }
   }
 }
 
