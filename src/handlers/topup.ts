@@ -4,6 +4,7 @@ import {
   createDeposit,
   findDepositByTxHash,
   getDeposit,
+  listDeposits,
   listPaymentMethods,
   setCryptoPayInvoiceId,
   setZiniPayInvoiceId,
@@ -475,7 +476,25 @@ export function registerTopup(bot: Composer<AppCtx>): void {
   // ----- Auto-verify top-up flows -----
   bot.on('message:text', async (ctx, next) => {
     const flow = ctx.session.userFlow;
-    if (!flow) return next();
+
+    // Sessions live in memory, so every redeploy / restart wipes any
+    // in-flight top-up. The buyer sends the money, comes back with the
+    // transaction id, pastes it — and without a flow the message used
+    // to fall through silently, leaving a real payment stranded as a
+    // `pending` deposit nobody ever verified.
+    //
+    // Recover: if the text looks like a transaction id and the buyer
+    // has a recent pending chain deposit waiting for exactly that,
+    // rebuild the flow and verify as normal.
+    if (!flow) {
+      const recovered = await recoverChainFlow(ctx, ctx.message.text.trim());
+      if (recovered) {
+        ctx.session.userFlow = recovered;
+        await handleChainTopupSubmit(ctx, recovered, ctx.message.text.trim());
+        return;
+      }
+      return next();
+    }
 
     const text = ctx.message.text.trim();
     if (text === '/cancel' || text.startsWith('/')) {
@@ -598,6 +617,78 @@ export function registerTopup(bot: Composer<AppCtx>): void {
  * so manual methods failed with a generic "Temporary error" and the
  * admin never saw a request at all.
  */
+/**
+ * Rebuild a `chain_topup` tx_hash flow for a buyer whose session was
+ * lost (bot restart / redeploy / long pause) but who still has a
+ * recent pending chain deposit awaiting its transaction id.
+ *
+ * Returns null when the text isn't hash-shaped, when there is no
+ * matching pending deposit, or when the payment method behind it no
+ * longer exists — in those cases the message falls through untouched.
+ */
+async function recoverChainFlow(
+  ctx: AppCtx,
+  text: string,
+): Promise<Extract<
+  NonNullable<AppCtx['session']['userFlow']>,
+  { type: 'chain_topup'; step: 'tx_hash' }
+> | null> {
+  const cleaned = text.replace(/\s+/g, '');
+  const hashShaped =
+    /^(0x)?[0-9a-fA-F]{64}$/.test(cleaned) || /^[A-Za-z0-9+/=_-]{43,44}$/.test(cleaned);
+  if (!hashShaped) return null;
+
+  const CHAIN_PROVIDERS = ['usdt_trc20', 'usdt_bep20', 'usdt_ton'] as const;
+  type ChainProvider = (typeof CHAIN_PROVIDERS)[number];
+
+  let recent: Awaited<ReturnType<typeof listDeposits>>;
+  let methods: Awaited<ReturnType<typeof listPaymentMethods>>;
+  try {
+    [recent, methods] = await Promise.all([
+      listDeposits(ctx.user.telegram_id, 10),
+      listPaymentMethods(),
+    ]);
+  } catch (err) {
+    logger.error({ err, user: ctx.user.telegram_id }, 'chain flow recovery lookup failed');
+    return null;
+  }
+
+  const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  for (const dep of recent) {
+    if (dep.status !== 'pending') continue;
+    if (dep.tx_hash) continue;
+    if (!dep.expected_amount) continue;
+    if (now - new Date(dep.created_at).getTime() > MAX_AGE_MS) continue;
+
+    const m = methods.find((x) => x.name === dep.method);
+    if (!m || !m.address) continue;
+    if (!CHAIN_PROVIDERS.includes(m.provider as ChainProvider)) continue;
+
+    const openedAtMs = new Date(dep.created_at).getTime();
+    logger.info(
+      { depId: dep.id, user: ctx.user.telegram_id, method: dep.method },
+      'recovered chain top-up flow from pending deposit (session was lost)',
+    );
+    return {
+      type: 'chain_topup',
+      step: 'tx_hash',
+      data: {
+        method_id: m.id,
+        method_name: m.name,
+        provider: m.provider as ChainProvider,
+        address: m.address,
+        deposit_id: dep.id,
+        reserved_amount: Number(dep.expected_amount),
+        expires_at_ms: openedAtMs + MAX_AGE_MS,
+        opened_at_ms: openedAtMs,
+      },
+    };
+  }
+  return null;
+}
+
 async function handleManualTopup(
   ctx: AppCtx,
   flow: Extract<NonNullable<AppCtx['session']['userFlow']>, { type: 'manual_topup' }>,
