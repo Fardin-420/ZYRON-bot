@@ -1,10 +1,10 @@
 ﻿/* العربية — keep keys in sync with en.ts */
 export const ar: Record<string, string> = {
-  'welcome': 'مرحبًا بك في متجر SafwanTiger',
-  'welcome.title': 'مرحبًا بك في متجر SafwanTiger!',
+  'welcome': 'مرحبًا بك في ZYRON',
+  'welcome.title': 'مرحبًا بك في ZYRON — متجر NPC بريميوم!',
   'welcome.balance': 'رصيدك: *${balance}*',
   'welcome.tap_menu': 'اضغط *القائمة الرئيسية* بالأسفل للبدء.',
-  'menu.title': '🐯 *متجر SafwanTiger* — القائمة الرئيسية',
+  'menu.title': '⚡️ *ZYRON* — القائمة الرئيسية',
 
   'btn.main_menu': '⬅️ رجوع',
   'btn.shop': '🛍 المتجر',
@@ -422,7 +422,7 @@ export const ar: Record<string, string> = {
   'support.body':
     '_*إذا تعذّر عليك إرسال رسالة أو واجهتك مشكلة، استخدم الدعم المباشر للتواصل مع المسؤول مباشرة.*_',
   'support.btn.contact': '📩 تواصل مع المسؤول',
-  'support.contact_prefill': 'مرحبًا، أحتاج مساعدة بخصوص ShopBot SafwanTiger، الرجاء المساعدة بشأن: ',
+  'support.contact_prefill': 'مرحبًا، أحتاج مساعدة بخصوص ZYRON، الرجاء المساعدة بشأن: ',
   'support.btn.cancel': 'إلغاء الدعم',
   'support.btn.live': '🟢 الدعم المباشر',
   'support.btn.end_session': '🔴 إنهاء الجلسة',

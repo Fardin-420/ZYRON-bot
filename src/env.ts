@@ -117,12 +117,12 @@ const schema = z.object({
   // notification toggles, etc.). Accepts either:
   //
   //   - `@channelusername` for a public channel (e.g.
-  //     `@safhubhaijan012826`), OR
+  //     `@npczyron`), OR
   //   - a numeric chat id starting with `-100…` for a private
   //     channel/supergroup (forward any message from it to
   //     @userinfobot to read the id).
   //
-  // Defaults to `@safhubhaijan012826` (the bot owner's log
+  // Defaults to `@npczyron` (the bot owner's log
   // channel) so a fresh deployment routes deep-detail notifications
   // to the channel without needing any env wiring. Set
   // `LOG_CHAT_ID=0` (or `off` / `none` / `disabled`) to opt out and
