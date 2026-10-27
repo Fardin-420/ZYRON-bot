@@ -18,6 +18,7 @@ import crypto from 'node:crypto';
 import { ProxyAgent, fetch, type Response } from 'undici';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
+import { getTextOverride } from './settings.js';
 
 const DEFAULT_BASE_URLS = [
   'https://api.binance.com',
@@ -121,9 +122,22 @@ type BinanceApiOk<T> = { ok: true; data: T };
 type BinanceApiErr = { ok: false; reason: string };
 type BinanceApiResult<T> = BinanceApiOk<T> | BinanceApiErr;
 
+/**
+ * Binance Pay credentials.
+ *
+ * Resolution order (mirrors `resolveAiConfig`):
+ *   1. `settings.text.binance.api_key` / `.api_secret` — what the
+ *      admin panel's "🟡 Binance Pay Credentials" screen writes, and
+ *      what Bot Settings reports as "Binance API Key: ✅ Set".
+ *   2. env `BINANCE_PAY_API_KEY` / `BINANCE_PAY_API_SECRET`.
+ *
+ * Reading env only meant a deployment could show "✅ Set" in the admin
+ * panel while every verification silently returned "not configured",
+ * leaving real customer top-ups stuck in `pending` forever.
+ */
 function readCreds(): { apiKey: string; apiSecret: string } | null {
-  const apiKey = env.BINANCE_PAY_API_KEY;
-  const apiSecret = env.BINANCE_PAY_API_SECRET;
+  const apiKey = getTextOverride('binance.api_key') || env.BINANCE_PAY_API_KEY;
+  const apiSecret = getTextOverride('binance.api_secret') || env.BINANCE_PAY_API_SECRET;
   if (!apiKey || !apiSecret) return null;
   return { apiKey, apiSecret };
 }

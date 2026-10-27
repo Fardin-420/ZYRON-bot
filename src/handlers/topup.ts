@@ -668,6 +668,23 @@ async function handleChainUsdAmount(
 ): Promise<void> {
   const baseAmount = parseCryptoPayAmount(text, flow.data.min_amount);
   if (baseAmount === null) {
+    // Buyers routinely paste the transaction id here, because this is
+    // the first box they see after the wallet address. Telling them
+    // "invalid amount" leaves them stuck; name the mistake instead.
+    const looksLikeTxId = /^(0x)?[0-9a-fA-F]{40,}$/.test(text.replace(/\s+/g, '')) ||
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-/.test(text.trim()) ||
+      /^[A-Za-z0-9+/=_-]{32,}$/.test(text.trim());
+    if (looksLikeTxId) {
+      await ctx.reply(
+        renderMdHtml(
+          '⏳ *That looks like a transaction id — but not yet!*\n\n' +
+            'First tell me *how much* you are sending, e.g. `10` or `25.50`.\n' +
+            'I will ask for the transaction id right after.',
+        ),
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
     await ctx.reply(
       renderMdHtml(
         ctx.t('topup.usdt.invalid_amount', {
