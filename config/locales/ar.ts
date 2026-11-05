@@ -83,7 +83,6 @@ export const ar: Record<string, string> = {
   'btn.reseller_api': '🔑 Api Key',
   'btn.force_join': '📢 الانضمام للقناة',
   'btn.force_join_done': '✅ تم',
-  'btn.force_join_skip': '🔕 تخطي',
   'btn.cryptobot_open_invoice': '💳 فتح الفاتورة',
   'btn.cryptobot_check': '✅ دفعت / تحقق',
   'api.price_alert.up':

@@ -84,7 +84,6 @@ export const vi: Record<string, string> = {
   'btn.reseller_api': '🔑 Api Key',
   'btn.force_join': '📢 Tham gia kênh',
   'btn.force_join_done': '✅ Xong',
-  'btn.force_join_skip': '🔕 Bỏ qua',
   'btn.cryptobot_open_invoice': '💳 Mở hóa đơn',
   'btn.cryptobot_check': '✅ Đã thanh toán / Kiểm tra',
   'api.price_alert.up':

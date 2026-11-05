@@ -125,7 +125,6 @@ export const en: Record<string, string> = {
   'btn.reseller_api': '🔑 Api Key',
   'btn.force_join': '📢 Join Channel',
   'btn.force_join_done': '✅ Done',
-  'btn.force_join_skip': '🔕 Skip',
   'btn.cryptobot_open_invoice': '💳 Open invoice',
   'btn.cryptobot_check': '✅ I’ve paid / Check',
   'api.price_alert.up':

@@ -11,9 +11,42 @@ import { inlineBtn, inlineUrl } from '../keyboards/helpers.js';
 const DEFAULT_FORCE_JOIN_CHANNEL = '@NoBoDy_Frdn';
 const BELL_EMOJI_ID = '5798670723975221399';
 const DONE_EMOJI_ID = '6170055790146098906';
-const SKIP_EMOJI_ID = '5843822645711212265';
 
-export type ForceJoinStatus = 'disabled' | 'joined' | 'not_joined' | 'unknown';
+// 'misconfigured' = the bot itself cannot read the channel member list
+// (removed from the channel, lost admin rights, wrong chat id). In that case the
+// gate opens so the shop keeps selling, and the problem is logged loudly.
+// 'unknown' = a transient Telegram error -> the gate stays closed.
+export type ForceJoinStatus =
+  | 'disabled'
+  | 'joined'
+  | 'not_joined'
+  | 'unknown'
+  | 'misconfigured';
+
+// Telegram error descriptions that mean "this bot cannot check this chat at all".
+const MISCONFIG_PATTERNS = [
+  'chat not found',
+  'bot is not a member',
+  'member list is inaccessible',
+  'chat_admin_required',
+  'not enough rights',
+  'bot was kicked',
+];
+
+// Telegram errors that mean "this user is simply not in the channel".
+const NOT_JOINED_PATTERNS = ['user not found', 'participant_id_invalid'];
+
+function isNotJoinedError(err: unknown): boolean {
+  if (!(err instanceof GrammyError)) return false;
+  const d = (err.description || '').toLowerCase();
+  return NOT_JOINED_PATTERNS.some((p) => d.includes(p));
+}
+
+function isMisconfigError(err: unknown): boolean {
+  if (!(err instanceof GrammyError)) return false;
+  const d = (err.description || '').toLowerCase();
+  return MISCONFIG_PATTERNS.some((p) => d.includes(p));
+}
 
 function forceJoinChatId(channelUrl: string): string | number | null {
   const raw = channelUrl.trim();
@@ -33,14 +66,22 @@ function forceJoinUrl(channelUrl: string): string {
 async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<ForceJoinStatus> {
   const chatId = forceJoinChatId(channelUrl);
   if (!chatId) {
-    logger.warn({ channelUrl }, 'force-join: invalid channel URL');
-    return 'unknown';
+    logger.error({ channelUrl }, 'force-join: invalid channel URL - gate disabled until fixed');
+    return 'misconfigured';
   }
   try {
     const member = await ctx.api.getChatMember(chatId, ctx.from!.id);
     return ['left', 'kicked'].includes(member.status) ? 'not_joined' : 'joined';
   } catch (err) {
-    logger.warn({ err, channelUrl }, 'force-join: membership check failed');
+    if (isNotJoinedError(err)) return 'not_joined';
+    if (isMisconfigError(err)) {
+      logger.error(
+        { err, channelUrl },
+        'force-join: bot cannot read channel members - make the bot an admin of the channel. Gate is open until fixed.',
+      );
+      return 'misconfigured';
+    }
+    logger.warn({ err, channelUrl }, 'force-join: membership check failed (transient)');
     return 'unknown';
   }
 }
@@ -48,14 +89,11 @@ async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<
 async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<void> {
   const kb = new InlineKeyboard();
   inlineUrl(kb, ctx.lang, 'force_join', forceJoinUrl(channelUrl)).row();
-  inlineBtn(kb, ctx.lang, 'force_join_done', 'forcejoin:done').row();
-  inlineBtn(kb, ctx.lang, 'force_join_skip', 'forcejoin:skip');
+  inlineBtn(kb, ctx.lang, 'force_join_done', 'forcejoin:done');
   const text = [
     `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join our Channel to continue using this bot.</b>`,
     '',
     `After joining, tap <b>"Done <tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji>"</b> below.`,
-    '',
-    `Or tap <b>"Skip <tg-emoji emoji-id="${SKIP_EMOJI_ID}">🔕</tg-emoji>"</b> to continue without joining.`,
   ].join('\n');
   try {
     await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
@@ -83,7 +121,7 @@ export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus
 
 export async function isForceJoinSatisfied(ctx: AppCtx): Promise<boolean> {
   const status = await checkForceJoinStatus(ctx);
-  return status === 'disabled' || status === 'joined';
+  return status === 'disabled' || status === 'joined' || status === 'misconfigured';
 }
 
 export async function sendForceJoinPrompt(ctx: AppCtx): Promise<void> {
@@ -95,17 +133,12 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (!ctx.from) return next();
   if (!getForceJoinEnabled()) return next();
   if (ctx.callbackQuery?.data === 'forcejoin:done') return next();
-  if (ctx.callbackQuery?.data === 'forcejoin:skip') return next();
   if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
-  if (
-    !(ctx.session.forceJoinRequired ||
-      (ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created)
-  ) {
-    return next();
-  }
 
+  // Every user is checked on every update (the result is cached in the session
+  // once they are confirmed as a member, so this costs one API call per session).
   const status = await checkForceJoinStatus(ctx);
-  if (status === 'disabled' || status === 'joined') return next();
+  if (status === 'disabled' || status === 'joined' || status === 'misconfigured') return next();
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery({
       text: 'Please join the channel first, then tap Done.',

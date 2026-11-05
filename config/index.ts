@@ -107,7 +107,6 @@ export const BUTTON_KEYS = {
   reseller_api: 'btn.reseller_api',
   force_join: 'btn.force_join',
   force_join_done: 'btn.force_join_done',
-  force_join_skip: 'btn.force_join_skip',
   cryptobot_open_invoice: 'btn.cryptobot_open_invoice',
   cryptobot_check: 'btn.cryptobot_check',
   back_to_settings: 'btn.back_to_settings',
@@ -321,7 +320,6 @@ export const DEFAULT_BUTTON_COLORS: Record<keyof typeof BUTTON_KEYS, ColorMode> 
   reseller_api: 'blue',
   force_join: 'blue',
   force_join_done: 'green',
-  force_join_skip: 'none',
   cryptobot_open_invoice: 'green',
   cryptobot_check: 'green',
   back_to_settings: 'none',
@@ -864,7 +862,6 @@ export const BUTTON_ICONS: Partial<Record<keyof typeof BUTTON_KEYS, string>> = {
   reseller_api: 'api_key',
   force_join: 'notify_stock',
   force_join_done: 'notify_on',
-  force_join_skip: 'notify_off',
   cryptobot_open_invoice: 'cryptobot_open_invoice',
   cryptobot_check: 'cryptobot_check',
 

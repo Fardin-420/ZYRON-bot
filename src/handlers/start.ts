@@ -139,12 +139,8 @@ export async function showMainMenu(
 }
 
 async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
-  if (
-    !ctx.session.forceJoinRequired &&
-    !(ctx.user as typeof ctx.user & { __just_created?: boolean }).__just_created
-  ) {
-    return false;
-  }
+  // Checked for every user, not only for the ones flagged as pending: an
+  // existing user who leaves the channel is gated again on their next action.
   if (await isForceJoinSatisfied(ctx)) return false;
   await sendForceJoinPrompt(ctx);
   return true;
@@ -373,6 +369,21 @@ export function registerStart(bot: Composer<AppCtx>): void {
 
   bot.callbackQuery('forcejoin:done', async (ctx) => {
     const status = await checkForceJoinStatus(ctx);
+    // Fail closed: only a confirmed membership (or a disabled / broken-config
+    // gate) unlocks the bot. A transient check failure keeps the gate shut.
+    if (status === 'joined') {
+      ctx.session.forceJoinUnlocked = true;
+      await activateReferralForUser(ctx);
+      await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
+      await showMainMenu(ctx);
+      return;
+    }
+    if (status === 'disabled' || status === 'misconfigured') {
+      ctx.session.forceJoinUnlocked = true;
+      await ctx.answerCallbackQuery();
+      await showMainMenu(ctx);
+      return;
+    }
     if (status === 'not_joined') {
       await ctx.answerCallbackQuery({
         text: 'Please join the channel first, then tap Done.',
@@ -380,25 +391,16 @@ export function registerStart(bot: Composer<AppCtx>): void {
       });
       return;
     }
-    ctx.session.forceJoinUnlocked = true;
-    if (status === 'joined') {
-      await activateReferralForUser(ctx);
-    }
-    await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
-    await showMainMenu(ctx);
+    await ctx.answerCallbackQuery({
+      text: 'Could not verify your membership. Please try again in a moment.',
+      show_alert: true,
+    });
   });
 
-  bot.callbackQuery('forcejoin:skip', async (ctx) => {
-    ctx.session.forceJoinUnlocked = true;
-    ctx.session.forceJoinRequired = false;
-    await ctx.answerCallbackQuery({ text: 'Skipped.' });
-    await showMainMenu(ctx);
-  });
-
-  // Legacy channel button callback. The old join/channel prompt is disabled:
-  // users should always be able to access the bot without joining anything.
+  // Legacy channel button callback: send the user back through the gate.
   bot.callbackQuery('channel:open', async (ctx) => {
     await ctx.answerCallbackQuery();
+    if (await maybeGateForceJoin(ctx)) return;
     await showMainMenu(ctx);
   });
 }
