@@ -120,6 +120,8 @@ import {
   refreshSettings,
   setChannelUrl,
   clearChannelUrl,
+  setForceJoinChannels,
+  getForceJoinChannels,
   getChannelUrl,
   getForceJoinEnabled,
   setForceJoinEnabled,
@@ -349,7 +351,7 @@ adminBot.callbackQuery('adm:close', async (ctx) => {
 async function showBotSettings(ctx: AppCtx): Promise<void> {
   const forceJoin = getForceJoinEnabled();
   const apiPriceAlerts = getApiPriceAlertsEnabled();
-  const channelUrl = getChannelUrl();
+  const forceJoinChannels = getForceJoinChannels();
   const kb = new InlineKeyboard()
     .text(forceJoin ? '🔒 Force Join: ON' : '🔓 Force Join: OFF', 'adm:bot:forcejoin:toggle')
     .row()
@@ -358,8 +360,8 @@ async function showBotSettings(ctx: AppCtx): Promise<void> {
       'adm:bot:api_price_alerts:toggle',
     )
     .row()
-    .text('📣 Set Join Channel', 'adm:bot:forcejoin:channel')
-    .text('🗑 Clear Join Channel', 'adm:bot:forcejoin:clear')
+    .text('📣 Set Join Channels', 'adm:bot:forcejoin:channel')
+    .text('🗑 Clear Join Channels', 'adm:bot:forcejoin:clear')
     .row()
     .text('📄 Set Email PDF URL', 'adm:bot:emailpdf')
     .row()
@@ -370,7 +372,10 @@ async function showBotSettings(ctx: AppCtx): Promise<void> {
     .text('🔁 Reload Settings', 'adm:reload');
   backRow(kb);
   const forceJoinLine = forceJoin ? '*ON*' : '*OFF*';
-  const channelLine = channelUrl ? `\`${channelUrl}\`` : '_not set_';
+  const channelLine =
+    forceJoinChannels.length > 0
+      ? forceJoinChannels.map((c) => `\`${c}\``).join(' + ')
+      : '_not set_';
   await ctx.editMessageText(
     [
       '⚙️ *Bot Settings*',
@@ -418,13 +423,15 @@ adminBot.callbackQuery('adm:bot:forcejoin:channel', async (ctx) => {
   const kb = new InlineKeyboard().text('⬅️ Back', 'adm:bot');
   await ctx.editMessageText(
     [
-      '📣 *Set Join Channel*',
+      '📣 *Set Join Channels*',
       '',
-      'Send public channel username or link:',
-      '`@yourchannel`',
-      '`https://t.me/yourchannel`',
+      'Send one channel per line to require ALL of them:',
+      '`@channelone`',
+      '`@channeltwo`',
       '',
-      'Important: add this bot as admin in that channel, otherwise Telegram cannot verify members.',
+      'A single channel also works. Links and `-100...` ids are accepted.',
+      '',
+      'Important: add this bot as admin in every channel, otherwise Telegram cannot verify members.',
       '',
       'Send /cancel to abort.',
     ].join('\n'),
@@ -433,6 +440,7 @@ adminBot.callbackQuery('adm:bot:forcejoin:channel', async (ctx) => {
 });
 
 adminBot.callbackQuery('adm:bot:forcejoin:clear', async (ctx) => {
+  await setForceJoinChannels([], ctx.from!.id);
   await clearChannelUrl(ctx.from!.id);
   await setForceJoinEnabled(false, ctx.from!.id);
   ctx.session.adminFlow = undefined;
@@ -10158,17 +10166,23 @@ adminBot.on('message:text', async (ctx, next) => {
     }
 
     if (flow.type === 'set_force_join_channel') {
-      const value = text.trim();
-      const valid =
+      // One channel per line (commas and spaces also work): the user must be a
+      // member of every channel listed here.
+      const entries = text
+        .split(/[\n,]+/)
+        .map((e) => e.trim())
+        .filter((e) => e.length > 0);
+      const isValid = (value: string) =>
         /^@[A-Za-z0-9_]{5,}$/i.test(value) ||
         /^https?:\/\/t\.me\/[A-Za-z0-9_]{5,}(?:\/.*)?$/i.test(value) ||
         /^-100\d+$/.test(value);
-      if (!valid) {
+      const invalid = entries.filter((e) => !isValid(e));
+      if (entries.length === 0 || invalid.length > 0) {
         await ctx.reply(
           [
-            '❌ Send a public channel username or link:',
-            '`@yourchannel`',
-            '`https://t.me/yourchannel`',
+            '❌ Send one channel per line, as a username or link:',
+            '`@channelone`',
+            '`@channeltwo`',
             '',
             'For private channels, send numeric chat id like `-1001234567890` and make sure bot is admin.',
           ].join('\n'),
@@ -10176,16 +10190,17 @@ adminBot.on('message:text', async (ctx, next) => {
         );
         return;
       }
-      await setChannelUrl(value, ctx.from!.id);
+      await setForceJoinChannels(entries, ctx.from!.id);
       await setForceJoinEnabled(true, ctx.from!.id);
       ctx.session.adminFlow = undefined;
       await ctx.reply(
         [
-          '✅ Force Join channel saved and enabled.',
+          `✅ Force Join saved and enabled (${entries.length} channel${entries.length > 1 ? 's' : ''}).`,
           '',
-          `Channel: \`${value}\``,
+          ...entries.map((e, i) => `${i + 1}. \`${e}\``),
           '',
-          'Make sure the bot is admin in that channel so membership checks work.',
+          'Users must join every channel listed above.',
+          'Make sure the bot is admin in each one so membership checks work.',
         ].join('\n'),
         { parse_mode: 'Markdown', reply_markup: rootMenu() },
       );

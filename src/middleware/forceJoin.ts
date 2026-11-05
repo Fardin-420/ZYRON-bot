@@ -3,12 +3,12 @@ import type { AppCtx } from './user.js';
 import { logger } from '../logger.js';
 import {
   clearForceJoinPending,
-  getChannelUrl,
+  getForceJoinChannels,
   getForceJoinEnabled,
 } from '../services/settings.js';
-import { inlineBtn, inlineUrl } from '../keyboards/helpers.js';
+import { inlineBtn } from '../keyboards/helpers.js';
 
-const DEFAULT_FORCE_JOIN_CHANNEL = '@NoBoDy_Frdn';
+const DEFAULT_FORCE_JOIN_CHANNELS = ['@NoBoDy_Frdn', '@npcbackup'];
 const BELL_EMOJI_ID = '5798670723975221399';
 const DONE_EMOJI_ID = '6170055790146098906';
 
@@ -86,14 +86,41 @@ async function checkChannelMembership(ctx: AppCtx, channelUrl: string): Promise<
   }
 }
 
-async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<void> {
+/** Channel titles, resolved once per process so the prompt can name them. */
+const titleCache = new Map<string, string>();
+
+async function channelTitle(ctx: AppCtx, channelUrl: string): Promise<string> {
+  const cached = titleCache.get(channelUrl);
+  if (cached) return cached;
+  const chatId = forceJoinChatId(channelUrl);
+  let title = channelUrl.replace(/^https?:\/\/t\.me\//i, '@');
+  if (chatId) {
+    try {
+      const chat = await ctx.api.getChat(chatId);
+      if ('title' in chat && chat.title) title = chat.title;
+    } catch {
+      // Fall back to the handle; a failed getChat is not worth blocking on.
+    }
+  }
+  titleCache.set(channelUrl, title);
+  return title;
+}
+
+async function showForceJoinPrompt(ctx: AppCtx, missing: string[]): Promise<void> {
+  const channels = missing.length > 0 ? missing : activeForceJoinChannels();
   const kb = new InlineKeyboard();
-  inlineUrl(kb, ctx.lang, 'force_join', forceJoinUrl(channelUrl)).row();
+  for (const channel of channels) {
+    const title = await channelTitle(ctx, channel);
+    kb.url(`📢 Join ${title}`, forceJoinUrl(channel)).row();
+  }
   inlineBtn(kb, ctx.lang, 'force_join_done', 'forcejoin:done');
+  const plural = channels.length > 1;
   const text = [
-    `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join our Channel to continue using this bot.</b>`,
+    `<tg-emoji emoji-id="${BELL_EMOJI_ID}">🔔</tg-emoji> <b>Please join ${
+      plural ? `all ${channels.length} channels` : 'our Channel'
+    } to continue using this bot.</b>`,
     '',
-    `After joining, tap <b>"Done <tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji>"</b> below.`,
+    `After joining ${plural ? 'both' : ''}, tap <b>"Done <tg-emoji emoji-id="${DONE_EMOJI_ID}">✅</tg-emoji>"</b> below.`,
   ].join('\n');
   try {
     await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
@@ -106,16 +133,49 @@ async function showForceJoinPrompt(ctx: AppCtx, channelUrl: string): Promise<voi
   }
 }
 
-export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus> {
-  if (!getForceJoinEnabled()) return 'disabled';
-  if (ctx.session.forceJoinUnlocked) return 'joined';
-  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
-  const status = await checkChannelMembership(ctx, channelUrl);
+function activeForceJoinChannels(): string[] {
+  const configured = getForceJoinChannels();
+  return configured.length > 0 ? configured : DEFAULT_FORCE_JOIN_CHANNELS;
+}
+
+/**
+ * Check every configured channel. The user is only let through once they are
+ * a member of ALL of them. `missing` lists the channels still to join, so the
+ * prompt can show one button per channel instead of a generic link.
+ */
+export async function checkForceJoin(
+  ctx: AppCtx,
+): Promise<{ status: ForceJoinStatus; missing: string[] }> {
+  if (!getForceJoinEnabled()) return { status: 'disabled', missing: [] };
+  if (ctx.session.forceJoinUnlocked) return { status: 'joined', missing: [] };
+
+  const channels = activeForceJoinChannels();
+  const results = await Promise.all(
+    channels.map(async (channel) => ({
+      channel,
+      status: await checkChannelMembership(ctx, channel),
+    })),
+  );
+
+  const missing = results.filter((r) => r.status === 'not_joined').map((r) => r.channel);
+  // Precedence: a channel the user must still join wins over any error, and a
+  // transient error keeps the gate shut while a broken config opens it.
+  let status: ForceJoinStatus;
+  if (missing.length > 0) status = 'not_joined';
+  else if (results.some((r) => r.status === 'unknown')) status = 'unknown';
+  else if (results.every((r) => r.status === 'misconfigured')) status = 'misconfigured';
+  else status = 'joined';
+
   if (status === 'joined') {
     ctx.session.forceJoinUnlocked = true;
     ctx.session.forceJoinRequired = false;
     await clearForceJoinPending(ctx.user.telegram_id);
   }
+  return { status, missing };
+}
+
+export async function checkForceJoinStatus(ctx: AppCtx): Promise<ForceJoinStatus> {
+  const { status } = await checkForceJoin(ctx);
   return status;
 }
 
@@ -124,9 +184,8 @@ export async function isForceJoinSatisfied(ctx: AppCtx): Promise<boolean> {
   return status === 'disabled' || status === 'joined' || status === 'misconfigured';
 }
 
-export async function sendForceJoinPrompt(ctx: AppCtx): Promise<void> {
-  const channelUrl = getChannelUrl() ?? DEFAULT_FORCE_JOIN_CHANNEL;
-  await showForceJoinPrompt(ctx, channelUrl);
+export async function sendForceJoinPrompt(ctx: AppCtx, missing: string[] = []): Promise<void> {
+  await showForceJoinPrompt(ctx, missing);
 }
 
 export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
@@ -136,17 +195,21 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
 
   // Every user is checked on every update (the result is cached in the session
-  // once they are confirmed as a member, so this costs one API call per session).
-  const status = await checkForceJoinStatus(ctx);
+  // once they are confirmed as a member of every channel, so this costs one
+  // round of API calls per session).
+  const { status, missing } = await checkForceJoin(ctx);
   if (status === 'disabled' || status === 'joined' || status === 'misconfigured') return next();
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery({
-      text: 'Please join the channel first, then tap Done.',
+      text:
+        missing.length > 1
+          ? 'Please join both channels first, then tap Done.'
+          : 'Please join the channel first, then tap Done.',
       show_alert: true,
     });
   }
   try {
-    await sendForceJoinPrompt(ctx);
+    await sendForceJoinPrompt(ctx, missing);
   } catch (err) {
     if (err instanceof GrammyError && err.error_code === 403) {
       logger.debug({ telegram_id: ctx.from.id }, 'force-join prompt skipped for blocked user');

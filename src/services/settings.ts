@@ -234,6 +234,39 @@ export async function clearChannelUrl(updated_by?: number): Promise<void> {
   cache.set('channel.url', '');
 }
 
+/**
+ * Every channel a user must be a member of before they can use the bot.
+ * Stored as a JSON array under `force_join.channels`; falls back to the
+ * single legacy `channel.url` value so older installs keep working.
+ */
+export function getForceJoinChannels(): string[] {
+  const raw = cache.get('force_join.channels');
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string' && raw.length > 0
+      ? raw.split(/[\s,]+/)
+      : [];
+  const out = list
+    .filter((c): c is string => typeof c === 'string')
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+  if (out.length > 0) return [...new Set(out)];
+  const single = getChannelUrl();
+  return single ? [single] : [];
+}
+
+export async function setForceJoinChannels(
+  channels: string[],
+  updated_by?: number,
+): Promise<void> {
+  const list = [...new Set(channels.map((c) => c.trim()).filter((c) => c.length > 0))];
+  await setSetting('force_join.channels', list, updated_by);
+  cache.set('force_join.channels', list);
+  // Keep the legacy single-channel key pointing at the first entry so the
+  // main-menu Channel button and any old code path stay consistent.
+  if (list[0]) await setChannelUrl(list[0], updated_by);
+}
+
 const FORCE_JOIN_PENDING_PREFIX = 'force_join.pending.';
 
 export function isForceJoinPending(telegram_id: number): boolean {

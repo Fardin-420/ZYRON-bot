@@ -25,8 +25,7 @@ import { showTopupMenu } from './topup.js';
 import { showShopHome } from './shop.js';
 import { showApiPanel } from './resellerApi.js';
 import {
-  checkForceJoinStatus,
-  isForceJoinSatisfied,
+  checkForceJoin,
   sendForceJoinPrompt,
 } from '../middleware/forceJoin.js';
 import { logger } from '../logger.js';
@@ -141,8 +140,9 @@ export async function showMainMenu(
 async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
   // Checked for every user, not only for the ones flagged as pending: an
   // existing user who leaves the channel is gated again on their next action.
-  if (await isForceJoinSatisfied(ctx)) return false;
-  await sendForceJoinPrompt(ctx);
+  const { status, missing } = await checkForceJoin(ctx);
+  if (status === 'disabled' || status === 'joined' || status === 'misconfigured') return false;
+  await sendForceJoinPrompt(ctx, missing);
   return true;
 }
 
@@ -368,7 +368,7 @@ export function registerStart(bot: Composer<AppCtx>): void {
   });
 
   bot.callbackQuery('forcejoin:done', async (ctx) => {
-    const status = await checkForceJoinStatus(ctx);
+    const { status, missing } = await checkForceJoin(ctx);
     // Fail closed: only a confirmed membership (or a disabled / broken-config
     // gate) unlocks the bot. A transient check failure keeps the gate shut.
     if (status === 'joined') {
@@ -386,7 +386,10 @@ export function registerStart(bot: Composer<AppCtx>): void {
     }
     if (status === 'not_joined') {
       await ctx.answerCallbackQuery({
-        text: 'Please join the channel first, then tap Done.',
+        text:
+          missing.length > 1
+            ? 'Please join both channels first, then tap Done.'
+            : 'Please join the channel first, then tap Done.',
         show_alert: true,
       });
       return;
