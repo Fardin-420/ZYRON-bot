@@ -15,8 +15,6 @@ import { maybeSendEmailNag } from '../services/emailNag.js';
 import * as publicFeed from '../services/publicFeed.js';
 import {
   getForceJoinEnabled,
-  isForceJoinPending,
-  setForceJoinPending,
 } from '../services/settings.js';
 
 export type AppCtx = SessionCtx & {
@@ -54,15 +52,9 @@ export const userMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   ctx.user.currency = normalizeCurrency((user as DBUser & { currency?: string | null }).currency);
   ctx.lang = user.language;
   ctx.t = (key, vars) => translate(ctx.lang, key, vars);
-  if (
-    (user as DBUser & { __just_created?: boolean }).__just_created &&
-    getForceJoinEnabled()
-  ) {
-    await setForceJoinPending(ctx.from.id, true);
-    ctx.session.forceJoinRequired = true;
-  } else if (isForceJoinPending(ctx.from.id)) {
-    ctx.session.forceJoinRequired = true;
-  }
+  // No per-user "pending" flag is written any more: the force-join gate
+  // verifies live membership for every user on every update, so a stored
+  // flag added nothing and grew the settings table by one row per user.
 
   // Fire-and-forget the 12h email nag.
   void maybeSendEmailNag(ctx);

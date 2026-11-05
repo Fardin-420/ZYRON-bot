@@ -137,6 +137,28 @@ export async function showMainMenu(
   }
 }
 
+/**
+ * The `/start <payload>` text to act on. When the force-join gate blocked the
+ * original message, the middleware stashed it in the session so the deep link
+ * still resolves once the user has joined and tapped Done.
+ */
+function startText(ctx: AppCtx): string {
+  return ctx.message?.text ?? ctx.session.pendingStartText ?? '';
+}
+
+/** Run the deep-link chain; returns true when one of them handled the update. */
+async function runStartDeepLinks(ctx: AppCtx): Promise<boolean> {
+  if (await handleReferDeepLink(ctx)) return true;
+  if (await handleSettingsDeepLink(ctx)) return true;
+  if (await handleTopupDeepLink(ctx)) return true;
+  if (await handleApiDeepLink(ctx)) return true;
+  if (await handleShopDeepLink(ctx)) return true;
+  if (await handleSupportDeepLink(ctx)) return true;
+  if (await handleProductDeepLink(ctx)) return true;
+  if (await handleInvoiceDeepLink(ctx)) return true;
+  return false;
+}
+
 async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
   // Checked for every user, not only for the ones flagged as pending: an
   // existing user who leaves the channel is gated again on their next action.
@@ -154,7 +176,7 @@ async function maybeGateForceJoin(ctx: AppCtx): Promise<boolean> {
  * deep link was handled and the caller should NOT show the main menu.
  */
 async function handleProductDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   const m = text.match(/^\/start(?:@\S+)?\s+prod_(\d+)/i);
   if (!m) return false;
   const id = Number(m[1]);
@@ -197,7 +219,7 @@ async function handleProductDeepLink(ctx: AppCtx): Promise<boolean> {
  * My Orders → Find by ID.
  */
 async function handleInvoiceDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   const m = text.match(/^\/start(?:@\S+)?\s+ord_([0-9A-Z]+)/i);
   if (!m) return false;
   const dbId = parsePublicOrderId(`ORD${m[1]}`);
@@ -243,42 +265,42 @@ async function handleInvoiceDeepLink(ctx: AppCtx): Promise<boolean> {
 }
 
 async function handleReferDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   if (!/^\/start(?:@\S+)?\s+refer\b/i.test(text)) return false;
   await showReferScreen(ctx, { forceReply: true });
   return true;
 }
 
 async function handleSettingsDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   if (!/^\/start(?:@\S+)?\s+settings\b/i.test(text)) return false;
   await showProfile(ctx, { forceReply: true });
   return true;
 }
 
 async function handleTopupDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   if (!/^\/start(?:@\S+)?\s+topup\b/i.test(text)) return false;
   await showTopupMenu(ctx, false);
   return true;
 }
 
 async function handleApiDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   if (!/^\/start(?:@\S+)?\s+api\b/i.test(text)) return false;
   await showApiPanel(ctx);
   return true;
 }
 
 async function handleShopDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   if (!/^\/start(?:@\S+)?\s+shop\b/i.test(text)) return false;
   await showShopHome(ctx);
   return true;
 }
 
 async function handleSupportDeepLink(ctx: AppCtx): Promise<boolean> {
-  const text = ctx.message?.text ?? '';
+  const text = startText(ctx);
   if (!/^\/start(?:@\S+)?\s+support\b/i.test(text)) return false;
   await showSupportMenu(ctx);
   return true;
@@ -310,14 +332,7 @@ export function registerStart(bot: Composer<AppCtx>): void {
     if (flagged.__just_created) {
       await activateReferralForUser(ctx);
     }
-    if (await handleReferDeepLink(ctx)) return;
-    if (await handleSettingsDeepLink(ctx)) return;
-    if (await handleTopupDeepLink(ctx)) return;
-    if (await handleApiDeepLink(ctx)) return;
-    if (await handleShopDeepLink(ctx)) return;
-    if (await handleSupportDeepLink(ctx)) return;
-    if (await handleProductDeepLink(ctx)) return;
-    if (await handleInvoiceDeepLink(ctx)) return;
+    if (await runStartDeepLinks(ctx)) return;
     await showMainMenu(ctx, { fresh: true });
   });
 
@@ -375,6 +390,20 @@ export function registerStart(bot: Composer<AppCtx>): void {
       ctx.session.forceJoinUnlocked = true;
       await activateReferralForUser(ctx);
       await ctx.answerCallbackQuery({ text: 'Access unlocked.' });
+      // Replay the deep link the gate blocked (shared product, invoice,
+      // top-up, support) so the user lands where the link pointed. The
+      // payload stays in the session while the chain runs, since that is
+      // where the handlers read it from, and is cleared either way.
+      const pending = ctx.session.pendingStartText;
+      let handled = false;
+      if (pending) {
+        try {
+          handled = await runStartDeepLinks(ctx);
+        } finally {
+          ctx.session.pendingStartText = undefined;
+        }
+      }
+      if (handled) return;
       await showMainMenu(ctx);
       return;
     }

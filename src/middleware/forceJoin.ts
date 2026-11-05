@@ -7,6 +7,7 @@ import {
   getForceJoinEnabled,
 } from '../services/settings.js';
 import { inlineBtn } from '../keyboards/helpers.js';
+import { listAdminTelegramIds } from '../db/queries.js';
 
 const DEFAULT_FORCE_JOIN_CHANNELS = ['@NoBoDy_Frdn', '@npcbackup'];
 const BELL_EMOJI_ID = '5798670723975221399';
@@ -133,6 +134,30 @@ async function showForceJoinPrompt(ctx: AppCtx, missing: string[]): Promise<void
   }
 }
 
+// Admin ids from the `admins` table, cached so the gate costs no query per
+// update. Refreshed at most once a minute.
+let adminIdCache: Set<number> = new Set();
+let adminIdCacheAt = 0;
+const ADMIN_CACHE_TTL_MS = 60_000;
+
+async function refreshAdminIds(): Promise<void> {
+  if (Date.now() - adminIdCacheAt < ADMIN_CACHE_TTL_MS) return;
+  adminIdCacheAt = Date.now();
+  try {
+    adminIdCache = new Set(await listAdminTelegramIds());
+  } catch (err) {
+    logger.warn({ err }, 'force-join: admin id refresh failed, keeping cached list');
+  }
+}
+
+/** Admins are never gated: the owner plus every admin row in the database. */
+async function isForceJoinExempt(ctx: AppCtx): Promise<boolean> {
+  if (!ctx.from) return false;
+  if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return true;
+  await refreshAdminIds();
+  return adminIdCache.has(ctx.from.id);
+}
+
 function activeForceJoinChannels(): string[] {
   const configured = getForceJoinChannels();
   return configured.length > 0 ? configured : DEFAULT_FORCE_JOIN_CHANNELS;
@@ -192,7 +217,10 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
   if (!ctx.from) return next();
   if (!getForceJoinEnabled()) return next();
   if (ctx.callbackQuery?.data === 'forcejoin:done') return next();
-  if (ctx.from.id === Number(process.env.ADMIN_USER_ID || 0)) return next();
+  // Only private chats are gated. In a group (the public feed group, the log
+  // group) the bot must never answer with a join prompt.
+  if (ctx.chat && ctx.chat.type !== 'private') return next();
+  if (await isForceJoinExempt(ctx)) return next();
 
   // Every user is checked on every update (the result is cached in the session
   // once they are confirmed as a member of every channel, so this costs one
@@ -207,6 +235,10 @@ export const forceJoinMiddleware: MiddlewareFn<AppCtx> = async (ctx, next) => {
           : 'Please join the channel first, then tap Done.',
       show_alert: true,
     });
+  }
+  const blockedText = ctx.message?.text ?? '';
+  if (/^\/start(?:@\S+)?\s+\S/.test(blockedText)) {
+    ctx.session.pendingStartText = blockedText;
   }
   try {
     await sendForceJoinPrompt(ctx, missing);

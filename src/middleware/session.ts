@@ -904,6 +904,12 @@ export type SessionData = {
    * before accessing bot features.
    */
   forceJoinRequired?: boolean;
+  /**
+   * The `/start <payload>` text of the message that was blocked by the
+   * force-join gate, so the deep link (a shared product, an invoice, a
+   * referral) still opens after the user joins instead of being lost.
+   */
+  pendingStartText?: string;
 };
 
 export type SessionCtx = Context & SessionFlavor<SessionData>;
